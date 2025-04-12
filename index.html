@@ -651,29 +651,60 @@ body.hide-quaituan td.quai-tuan-column { display: none; }
 
         /* ▼▼▼ Thêm hàm xuất ảnh ở đây ▼▼▼ */
         async function exportToImage() {
-            if (!processedData.length) {
-                alert("Vui lòng tải file Excel trước!");
-                return;
-            }
+    if (!processedData.length) {
+        alert("Vui lòng tải file Excel trước!");
+        return;
+    }
 
-            try {
-                const element = document.getElementById(`${currentTab}Content`);
-                const canvas = await html2canvas(element, {
-                    scale: 2,
-                    useCORS: true,
-                    logging: false
-                });
+    const elementToCapture = document.getElementById(`${currentTab}Content`);
+    if (!elementToCapture) {
+        alert("Không tìm thấy nội dung để chụp ảnh.");
+        return;
+    }
 
-                const link = document.createElement('a');
-                link.download = `BaoCao_${currentTab}_${new Date().toISOString().slice(0, 10)}.png`;
-                link.href = canvas.toDataURL();
-                link.click();
+    // Có thể hiển thị thông báo đang xử lý cho người dùng
+    // Ví dụ: alert("Đang tạo ảnh, vui lòng đợi...");
 
-            } catch (error) {
-                console.error('Lỗi xuất ảnh:', error);
-                alert('Xuất ảnh thất bại! Vui lòng thử lại.');
-            }
+    try {
+        const canvas = await html2canvas(elementToCapture, {
+            scale: 1.5, // Giảm scale một chút có thể giúp trên thiết bị yếu
+            useCORS: true,
+            logging: false, // Tắt log không cần thiết
+            // Thêm tùy chọn nếu cần, ví dụ bỏ qua phần tử nào đó
+            // ignoreElements: (element) => element.classList.contains('some-class-to-ignore')
+        });
+
+        const imageDataUrl = canvas.toDataURL('image/png'); // Lấy dữ liệu ảnh dạng base64
+
+        // --- THAY ĐỔI CHÍNH Ở ĐÂY ---
+        // Mở ảnh trong tab mới thay vì tự động tải xuống
+        const newWindow = window.open();
+        if (newWindow) {
+            newWindow.document.write('<img src="' + imageDataUrl + '" alt="Báo cáo" style="max-width: 100%;">');
+            newWindow.document.title = `BaoCao_${currentTab}_${new Date().toISOString().slice(0, 10)}`;
+        } else {
+            // Nếu trình duyệt chặn mở tab mới
+            alert("Không thể mở tab mới. Vui lòng kiểm tra cài đặt chặn pop-up của trình duyệt và thử lại.");
+            // Có thể cung cấp link trực tiếp để người dùng tự mở
+            // console.log("Link ảnh:", imageDataUrl); // Log link để debug
         }
+        // --- KẾT THÚC THAY ĐỔI ---
+
+        /* Bỏ phần tự động tải xuống cũ
+        const link = document.createElement('a');
+        link.download = `BaoCao_${currentTab}_${new Date().toISOString().slice(0, 10)}.png`;
+        link.href = imageDataUrl;
+        link.click();
+        */
+
+    } catch (error) {
+        console.error('Lỗi xuất ảnh:', error);
+        alert('Xuất ảnh thất bại! Có lỗi xảy ra. Vui lòng thử lại hoặc kiểm tra console.');
+    } finally {
+        // Ẩn thông báo đang xử lý nếu có
+    }
+}
+
         /* ▲▲▲ Kết thúc phần thêm hàm ▲▲▲ */
 
         function processData(data) {
