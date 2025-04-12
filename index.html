@@ -657,55 +657,92 @@ body.hide-quaituan td.quai-tuan-column { display: none; }
     }
 
     const contentDivId = `${currentTab}Content`;
-    const elementToCapture = document.getElementById(contentDivId);
+    const contentDiv = document.getElementById(contentDivId);
 
-    if (!elementToCapture) {
+    if (!contentDiv) {
         alert("Không tìm thấy nội dung để chụp ảnh.");
         return;
     }
 
-    // Kiểm tra xem có bảng bên trong không
-    const tableElement = elementToCapture.querySelector('table');
+    // Tìm chính xác thẻ table bên trong div responsive
+    const tableElement = contentDiv.querySelector('.table-responsive > table');
+
     if (!tableElement) {
         alert(`Không tìm thấy bảng dữ liệu trong tab "${currentTab}" để xuất ảnh.`);
         return;
     }
 
-    // Hiển thị thông báo đang xử lý (tùy chọn)
-    const originalButtonText = document.querySelector('.export-image-btn').textContent;
-    document.querySelector('.export-image-btn').textContent = '📸 Đang xử lý...';
-    document.querySelector('.export-image-btn').disabled = true;
+    // --- Chuẩn bị chụp: Tạm thời sửa style ---
+    const thElements = tableElement.querySelectorAll('th');
+    const originalThStyles = [];
+    thElements.forEach(th => {
+        originalThStyles.push(th.style.position); // Lưu style gốc
+        th.style.position = 'static'; // Tạm thời bỏ sticky
+    });
+    // Có thể cần tạm thời bỏ overflow trên container nếu vẫn lỗi
+    // const responsiveDiv = contentDiv.querySelector('.table-responsive');
+    // const originalOverflow = responsiveDiv.style.overflowX;
+    // responsiveDiv.style.overflowX = 'visible';
 
 
-    // Thêm độ trễ nhỏ (ví dụ: 100ms) trước khi chụp
+    // --- Phản hồi UI ---
+    const exportButton = document.querySelector('.export-image-btn');
+    const originalButtonText = exportButton.textContent;
+    exportButton.textContent = '📸 Đang xử lý...';
+    exportButton.disabled = true;
+
+    // --- Trì hoãn và Chụp ---
     setTimeout(async () => {
+        let stylesRestored = false;
+        const restoreStyles = () => {
+            if (!stylesRestored) {
+                thElements.forEach((th, index) => {
+                    th.style.position = originalThStyles[index] || ''; // Khôi phục style gốc
+                });
+                // if (responsiveDiv) responsiveDiv.style.overflowX = originalOverflow; // Khôi phục overflow
+                stylesRestored = true;
+                console.log("Đã khôi phục style.");
+            }
+        };
+
         try {
-            console.log("Bắt đầu chụp ảnh phần tử:", contentDivId);
-            const canvas = await html2canvas(elementToCapture, {
+            console.log("Bắt đầu chụp ảnh bảng:", tableElement);
+            console.log("Kích thước chụp (scrollWidth x scrollHeight):", tableElement.scrollWidth, tableElement.scrollHeight);
+
+            const canvas = await html2canvas(tableElement, { // Chụp trực tiếp tableElement
                 scale: 1.5,
                 useCORS: true,
-                logging: false, // Bật true để debug nếu cần
-                // Đảm bảo chụp cả phần bị cuộn ngang nếu có
-                scrollX: 0,
-                scrollY: -window.scrollY, // Cần thiết nếu trang có cuộn dọc
-                windowWidth: elementToCapture.scrollWidth, // Chụp theo chiều rộng nội dung
-                windowHeight: elementToCapture.scrollHeight // Chụp theo chiều cao nội dung
+                logging: false,
+                backgroundColor: '#ffffff',
+                // --- THAY ĐỔI QUAN TRỌNG ---
+                width: tableElement.scrollWidth,   // Đặt chiều rộng canvas bằng chiều rộng nội dung thực tế của bảng
+                height: tableElement.scrollHeight, // Đặt chiều cao canvas bằng chiều cao nội dung thực tế của bảng
+                // Bỏ scrollX/Y và windowWidth/Height
+                // scrollX: 0,
+                // scrollY: 0, // Không cần scrollY vì chụp trực tiếp table
+                // windowWidth: tableElement.scrollWidth, // Dùng width thay thế
+                // windowHeight: tableElement.scrollHeight // Dùng height thay thế
+                // --- KẾT THÚC THAY ĐỔI ---
             });
             console.log("Đã tạo canvas");
 
-            const imageDataUrl = canvas.toDataURL('image/png');
+            restoreStyles(); // Khôi phục style ngay
 
-            // Mở ảnh trong tab mới (tốt hơn cho iOS)
+            const imageDataUrl = canvas.toDataURL('image/png');
+            console.log("ImageDataUrl (đầu):", imageDataUrl.substring(0, 100));
+
+            // --- Mở ảnh trong tab mới ---
             const newWindow = window.open();
             if (newWindow) {
                 newWindow.document.write(`
+                    <!DOCTYPE html>
                     <html>
                         <head><title>Báo cáo ${currentTab}</title></head>
                         <body style="margin:0;">
-                            <img src="${imageDataUrl}" alt="Báo cáo" style="max-width: 100%; display: block;">
+                            <img src="${imageDataUrl}" alt="Báo cáo ${currentTab}" style="max-width: 100%; display: block;">
                         </body>
                     </html>`);
-                // newWindow.document.title = `BaoCao_${currentTab}_${new Date().toISOString().slice(0, 10)}`; // Đặt title trong head tốt hơn
+                newWindow.document.close();
             } else {
                 alert("Không thể mở tab mới. Vui lòng kiểm tra cài đặt chặn pop-up của trình duyệt và thử lại.");
             }
@@ -713,14 +750,16 @@ body.hide-quaituan td.quai-tuan-column { display: none; }
         } catch (error) {
             console.error('Lỗi xuất ảnh:', error);
             alert(`Xuất ảnh thất bại! Lỗi: ${error.message}. Vui lòng thử lại hoặc kiểm tra console.`);
+            restoreStyles(); // Đảm bảo khôi phục nếu lỗi
         } finally {
-            // Khôi phục trạng thái nút
-            document.querySelector('.export-image-btn').textContent = originalButtonText;
-            document.querySelector('.export-image-btn').disabled = false;
+            // --- Khôi phục nút ---
+            exportButton.textContent = originalButtonText;
+            exportButton.disabled = false;
             console.log("Hoàn tất xử lý xuất ảnh.");
         }
-    }, 100); // Độ trễ 100 mili giây
+    }, 150); // Giữ nguyên độ trễ
 }
+
 
 
         /* ▲▲▲ Kết thúc phần thêm hàm ▲▲▲ */
