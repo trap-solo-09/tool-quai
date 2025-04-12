@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hệ Thống Quản Lý Săn Quái</title>
     <!-- Thêm vào phần head -->
-    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js">         
     </script><script src="https://cdn.jsdelivr.net/npm/chart.js"></script>    
     <style>
@@ -656,54 +656,72 @@ body.hide-quaituan td.quai-tuan-column { display: none; }
         return;
     }
 
-    const elementToCapture = document.getElementById(`${currentTab}Content`);
+    const contentDivId = `${currentTab}Content`;
+    const elementToCapture = document.getElementById(contentDivId);
+
     if (!elementToCapture) {
         alert("Không tìm thấy nội dung để chụp ảnh.");
         return;
     }
 
-    // Có thể hiển thị thông báo đang xử lý cho người dùng
-    // Ví dụ: alert("Đang tạo ảnh, vui lòng đợi...");
-
-    try {
-        const canvas = await html2canvas(elementToCapture, {
-            scale: 1.5, // Giảm scale một chút có thể giúp trên thiết bị yếu
-            useCORS: true,
-            logging: false, // Tắt log không cần thiết
-            // Thêm tùy chọn nếu cần, ví dụ bỏ qua phần tử nào đó
-            // ignoreElements: (element) => element.classList.contains('some-class-to-ignore')
-        });
-
-        const imageDataUrl = canvas.toDataURL('image/png'); // Lấy dữ liệu ảnh dạng base64
-
-        // --- THAY ĐỔI CHÍNH Ở ĐÂY ---
-        // Mở ảnh trong tab mới thay vì tự động tải xuống
-        const newWindow = window.open();
-        if (newWindow) {
-            newWindow.document.write('<img src="' + imageDataUrl + '" alt="Báo cáo" style="max-width: 100%;">');
-            newWindow.document.title = `BaoCao_${currentTab}_${new Date().toISOString().slice(0, 10)}`;
-        } else {
-            // Nếu trình duyệt chặn mở tab mới
-            alert("Không thể mở tab mới. Vui lòng kiểm tra cài đặt chặn pop-up của trình duyệt và thử lại.");
-            // Có thể cung cấp link trực tiếp để người dùng tự mở
-            // console.log("Link ảnh:", imageDataUrl); // Log link để debug
-        }
-        // --- KẾT THÚC THAY ĐỔI ---
-
-        /* Bỏ phần tự động tải xuống cũ
-        const link = document.createElement('a');
-        link.download = `BaoCao_${currentTab}_${new Date().toISOString().slice(0, 10)}.png`;
-        link.href = imageDataUrl;
-        link.click();
-        */
-
-    } catch (error) {
-        console.error('Lỗi xuất ảnh:', error);
-        alert('Xuất ảnh thất bại! Có lỗi xảy ra. Vui lòng thử lại hoặc kiểm tra console.');
-    } finally {
-        // Ẩn thông báo đang xử lý nếu có
+    // Kiểm tra xem có bảng bên trong không
+    const tableElement = elementToCapture.querySelector('table');
+    if (!tableElement) {
+        alert(`Không tìm thấy bảng dữ liệu trong tab "${currentTab}" để xuất ảnh.`);
+        return;
     }
+
+    // Hiển thị thông báo đang xử lý (tùy chọn)
+    const originalButtonText = document.querySelector('.export-image-btn').textContent;
+    document.querySelector('.export-image-btn').textContent = '📸 Đang xử lý...';
+    document.querySelector('.export-image-btn').disabled = true;
+
+
+    // Thêm độ trễ nhỏ (ví dụ: 100ms) trước khi chụp
+    setTimeout(async () => {
+        try {
+            console.log("Bắt đầu chụp ảnh phần tử:", contentDivId);
+            const canvas = await html2canvas(elementToCapture, {
+                scale: 1.5,
+                useCORS: true,
+                logging: false, // Bật true để debug nếu cần
+                // Đảm bảo chụp cả phần bị cuộn ngang nếu có
+                scrollX: 0,
+                scrollY: -window.scrollY, // Cần thiết nếu trang có cuộn dọc
+                windowWidth: elementToCapture.scrollWidth, // Chụp theo chiều rộng nội dung
+                windowHeight: elementToCapture.scrollHeight // Chụp theo chiều cao nội dung
+            });
+            console.log("Đã tạo canvas");
+
+            const imageDataUrl = canvas.toDataURL('image/png');
+
+            // Mở ảnh trong tab mới (tốt hơn cho iOS)
+            const newWindow = window.open();
+            if (newWindow) {
+                newWindow.document.write(`
+                    <html>
+                        <head><title>Báo cáo ${currentTab}</title></head>
+                        <body style="margin:0;">
+                            <img src="${imageDataUrl}" alt="Báo cáo" style="max-width: 100%; display: block;">
+                        </body>
+                    </html>`);
+                // newWindow.document.title = `BaoCao_${currentTab}_${new Date().toISOString().slice(0, 10)}`; // Đặt title trong head tốt hơn
+            } else {
+                alert("Không thể mở tab mới. Vui lòng kiểm tra cài đặt chặn pop-up của trình duyệt và thử lại.");
+            }
+
+        } catch (error) {
+            console.error('Lỗi xuất ảnh:', error);
+            alert(`Xuất ảnh thất bại! Lỗi: ${error.message}. Vui lòng thử lại hoặc kiểm tra console.`);
+        } finally {
+            // Khôi phục trạng thái nút
+            document.querySelector('.export-image-btn').textContent = originalButtonText;
+            document.querySelector('.export-image-btn').disabled = false;
+            console.log("Hoàn tất xử lý xuất ảnh.");
+        }
+    }, 100); // Độ trễ 100 mili giây
 }
+
 
         /* ▲▲▲ Kết thúc phần thêm hàm ▲▲▲ */
 
