@@ -1142,46 +1142,73 @@ function updateUI() {
             XLSX.writeFile(wb, 'BaoCaoSănQuái.xlsx');
         }
         async function loadExcelFromUrl() {
-            const rawUrl = document.getElementById('excelUrl').value.trim();
+    const rawUrl = document.getElementById('excelUrl').value.trim();
+    console.log("URL gốc:", rawUrl); // Log URL gốc
 
-            if (!rawUrl) {
-                alert("Vui lòng nhập URL Google Sheets!");
-                return;
-            }
+    if (!rawUrl) {
+        alert("Vui lòng nhập URL Google Sheets!");
+        return;
+    }
 
-            try {
-                // Chuyển đổi URL tiếng Việt thành URL tải xuống Excel
-                let finalUrl = rawUrl
-                    .replace(/\/edit\?.*$/, '/export') // Xóa tham số sau /edit
-                    .replace(/#gid=.*/, '') // Xóa phần #gid
-                    + '?format=xlsx'; // Thêm định dạng Excel
+    // Hiển thị thông báo đang xử lý (tùy chọn)
+    // Ví dụ: document.body.style.cursor = 'wait';
 
-                // Sử dụng proxy để tránh lỗi CORS (thay thế nếu cần)
-                const proxyUrl = 'https://api.codetabs.com/v1/proxy?quest=';
-                const response = await fetch(proxyUrl + encodeURIComponent(finalUrl), {
-                    headers: {
-                        'User-Agent': 'Mozilla/5.0' // Giả lập trình duyệt
-                    }
-                });
+    try {
+        // Chuyển đổi URL
+        let finalUrl = rawUrl
+            .replace(/\/edit\?.*$/, '/export')
+            .replace(/#gid=.*/, '')
+            + '?format=xlsx';
+        console.log("URL đã chuyển đổi:", finalUrl); // Log URL đã chuyển đổi
 
-                if (!response.ok) throw new Error(`Lỗi HTTP: ${response.status}`);
+        // Sử dụng proxy
+        const proxyUrl = 'https://api.codetabs.com/v1/proxy?quest=';
+        const fetchUrl = proxyUrl + encodeURIComponent(finalUrl);
+        console.log("URL Fetch qua Proxy:", fetchUrl); // Log URL sẽ fetch
 
-                // Xử lý dữ liệu
-                const arrayBuffer = await response.arrayBuffer();
-                const data = new Uint8Array(arrayBuffer);
-                const workbook = XLSX.read(data, { type: 'array' });
-                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-                const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+        const response = await fetch(fetchUrl, {
+            // Bỏ User-Agent để thử nghiệm, Safari có thể tự xử lý tốt hơn
+            // headers: {
+            //     'User-Agent': 'Mozilla/5.0'
+            // }
+            // Có thể thêm timeout nếu cần
+            // signal: AbortSignal.timeout(30000) // Timeout 30 giây
+        });
+        console.log("Trạng thái phản hồi:", response.status, response.statusText); // Log trạng thái
 
-                processedData = processData(jsonData);
-                updateUI();
-                alert("Tải file thành công!");
-
-            } catch (error) {
-                console.error("Chi tiết lỗi:", error);
-                alert(`Lỗi: ${error.message || "Kiểm tra lại URL hoặc kết nối mạng!"}`);
-            }
+        if (!response.ok) {
+            // Cố gắng đọc nội dung lỗi nếu có
+            let errorBody = await response.text().catch(() => 'Không thể đọc nội dung lỗi');
+            console.error("Nội dung lỗi từ proxy/server:", errorBody);
+            throw new Error(`Lỗi HTTP: ${response.status} ${response.statusText}`);
         }
+
+        // Xử lý dữ liệu
+        console.log("Đang xử lý dữ liệu ArrayBuffer...");
+        const arrayBuffer = await response.arrayBuffer();
+        console.log("Đã nhận ArrayBuffer, kích thước:", arrayBuffer.byteLength);
+        const data = new Uint8Array(arrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+        console.log("Đã phân tích dữ liệu JSON từ Excel.");
+
+        // Cập nhật cả originalData và processedData
+        originalData = processData(jsonData); // Dữ liệu gốc
+        processedData = JSON.parse(JSON.stringify(originalData)); // Bản sao để chỉnh sửa
+        currentTab = 'missing'; // Reset về tab mặc định
+        updateUI();
+        alert("Tải file thành công!");
+
+    } catch (error) {
+        console.error("Chi tiết lỗi khi tải URL:", error); // Log lỗi chi tiết
+        alert(`Lỗi tải URL: ${error.message || "Kiểm tra lại URL, kết nối mạng hoặc thử lại sau."}`);
+    } finally {
+        // Ẩn thông báo đang xử lý (nếu có)
+        // Ví dụ: document.body.style.cursor = 'default';
+    }
+}
+
 
         // Hàm kiểm tra URL hợp lệ
         function isValidExcelUrl(url) {
