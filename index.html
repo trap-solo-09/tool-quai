@@ -1429,15 +1429,16 @@
 
     // --- Cải thiện việc lấy URL export ---
     let exportUrl = '';
-    // Regex để tìm Google Sheet ID, linh hoạt hơn với các tham số khác nhau
-    const googleSheetRegex = /spreadsheets\/d\/([a-zA-Z0-9-_]+)/;
+    // Regex cập nhật để khớp cả 'spreadsheets/d/' và 'file/d/'
+    const googleSheetRegex = /(?:spreadsheets|file)\/d\/([a-zA-Z0-9-_]+)/;
     const match = rawUrl.match(googleSheetRegex);
 
     if (match && match[1]) {
         // Nếu tìm thấy ID, tạo URL export chuẩn
         const sheetId = match[1];
+        // Luôn tạo link export từ spreadsheets/d/ vì đó là endpoint chính thức
         exportUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=xlsx`;
-        console.log("Đã nhận dạng Google Sheet ID:", sheetId);
+        console.log("Đã nhận dạng Google Sheet/File ID:", sheetId);
         console.log("URL Export được tạo:", exportUrl);
     } else if (rawUrl.toLowerCase().endsWith('.xlsx') || rawUrl.toLowerCase().endsWith('.xls')) {
          // Giả sử là link trực tiếp đến file .xlsx/.xls (ít phổ biến, có thể cần proxy)
@@ -1445,7 +1446,7 @@
          console.log("URL có vẻ là link trực tiếp tới file Excel:", exportUrl);
     } else {
         // Nếu không nhận dạng được, báo lỗi
-        alert("URL không hợp lệ. Vui lòng cung cấp link Google Sheets hợp lệ (đã chia sẻ công khai) hoặc link trực tiếp đến file .xlsx.");
+        alert("URL không hợp lệ. Vui lòng cung cấp link Google Sheets/File hợp lệ (đã chia sẻ công khai) hoặc link trực tiếp đến file .xlsx.");
         return;
     }
     // --- Kết thúc cải thiện URL ---
@@ -1557,6 +1558,7 @@
         document.body.style.cursor = 'default';
     }
 }
+
 
 
         // Hàm kiểm tra URL hợp lệ
