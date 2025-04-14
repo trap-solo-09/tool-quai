@@ -1235,7 +1235,7 @@
                     item.target - item.points}
                                 </td>
                                 ${tabId !== 'sufficient' ? `
-                                    <td>${(item.target - item.points) * 2}</td>
+                                    <td>${(item.target - item.points) +5}</td>
                                 ` : ''}
                             </tr>
                         `).join('')}
@@ -1403,7 +1403,7 @@
                             "Quái Tuần": item.target,
                             "Points Hunt": item.points,
                             "Thiếu": item.target - item.points,
-                            "Bù": (item.target - item.points) * 2,
+                            "Bù": (item.target - item.points) + 5,
                             "Dư": Math.max(item.points - item.target, 0),
                             "Cấp độ cao nhất": "L" + calculateHighestLevel(item.levels)
                         };
