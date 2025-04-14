@@ -1419,72 +1419,144 @@
             XLSX.writeFile(wb, 'BaoCaoSănQuái.xlsx');
         }
         async function loadExcelFromUrl() {
-            const rawUrl = document.getElementById('excelUrl').value.trim();
-            console.log("URL gốc:", rawUrl); // Log URL gốc
+    const rawUrl = document.getElementById('excelUrl').value.trim();
+    console.log("URL gốc:", rawUrl); // Log URL gốc
 
-            if (!rawUrl) {
-                alert("Vui lòng nhập URL Google Sheets!");
-                return;
-            }
+    if (!rawUrl) {
+        alert("Vui lòng nhập URL Google Sheets!");
+        return;
+    }
 
-            // Hiển thị thông báo đang xử lý (tùy chọn)
-            // Ví dụ: document.body.style.cursor = 'wait';
+    // --- Cải thiện việc lấy URL export ---
+    let exportUrl = '';
+    // Regex để tìm Google Sheet ID, linh hoạt hơn với các tham số khác nhau
+    const googleSheetRegex = /spreadsheets\/d\/([a-zA-Z0-9-_]+)/;
+    const match = rawUrl.match(googleSheetRegex);
 
-            try {
-                // Chuyển đổi URL
-                let finalUrl = rawUrl
-                    .replace(/\/edit\?.*$/, '/export')
-                    .replace(/#gid=.*/, '')
-                    + '?format=xlsx';
-                console.log("URL đã chuyển đổi:", finalUrl); // Log URL đã chuyển đổi
+    if (match && match[1]) {
+        // Nếu tìm thấy ID, tạo URL export chuẩn
+        const sheetId = match[1];
+        exportUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=xlsx`;
+        console.log("Đã nhận dạng Google Sheet ID:", sheetId);
+        console.log("URL Export được tạo:", exportUrl);
+    } else if (rawUrl.toLowerCase().endsWith('.xlsx') || rawUrl.toLowerCase().endsWith('.xls')) {
+         // Giả sử là link trực tiếp đến file .xlsx/.xls (ít phổ biến, có thể cần proxy)
+        exportUrl = rawUrl;
+         console.log("URL có vẻ là link trực tiếp tới file Excel:", exportUrl);
+    } else {
+        // Nếu không nhận dạng được, báo lỗi
+        alert("URL không hợp lệ. Vui lòng cung cấp link Google Sheets hợp lệ (đã chia sẻ công khai) hoặc link trực tiếp đến file .xlsx.");
+        return;
+    }
+    // --- Kết thúc cải thiện URL ---
 
-                // Sử dụng proxy
-                const proxyUrl = 'https://api.codetabs.com/v1/proxy?quest=';
-                const fetchUrl = proxyUrl + encodeURIComponent(finalUrl);
-                console.log("URL Fetch qua Proxy:", fetchUrl); // Log URL sẽ fetch
+    // --- Hiển thị thông báo đang xử lý ---
+    const loadButton = document.querySelector('.url-input + .btn-primary'); // Tìm nút "Tải từ URL"
+    const originalButtonText = loadButton.textContent;
+    loadButton.textContent = 'Đang tải...';
+    loadButton.disabled = true;
+    document.body.style.cursor = 'wait'; // Đổi con trỏ chuột
 
-                const response = await fetch(fetchUrl, {
-                    // Bỏ User-Agent để thử nghiệm, Safari có thể tự xử lý tốt hơn
-                    // headers: {
-                    //     'User-Agent': 'Mozilla/5.0'
-                    // }
-                    // Có thể thêm timeout nếu cần
-                    // signal: AbortSignal.timeout(30000) // Timeout 30 giây
-                });
-                console.log("Trạng thái phản hồi:", response.status, response.statusText); // Log trạng thái
+    try {
+        // Sử dụng proxy (vẫn cần thiết cho CORS)
+        const proxyUrl = 'https://api.codetabs.com/v1/proxy?quest='; // Bạn có thể thử proxy khác nếu cần
+        const fetchUrl = proxyUrl + encodeURIComponent(exportUrl);
+        console.log("URL Fetch qua Proxy:", fetchUrl);
 
-                if (!response.ok) {
-                    // Cố gắng đọc nội dung lỗi nếu có
-                    let errorBody = await response.text().catch(() => 'Không thể đọc nội dung lỗi');
-                    console.error("Nội dung lỗi từ proxy/server:", errorBody);
-                    throw new Error(`Lỗi HTTP: ${response.status} ${response.statusText}`);
-                }
+        const response = await fetch(fetchUrl, {
+             signal: AbortSignal.timeout(30000) // Thêm timeout 30 giây
+        });
+        console.log("Trạng thái phản hồi:", response.status, response.statusText);
+        console.log("Headers phản hồi:", Object.fromEntries(response.headers.entries())); // Log headers để kiểm tra
 
-                // Xử lý dữ liệu
-                console.log("Đang xử lý dữ liệu ArrayBuffer...");
-                const arrayBuffer = await response.arrayBuffer();
-                console.log("Đã nhận ArrayBuffer, kích thước:", arrayBuffer.byteLength);
-                const data = new Uint8Array(arrayBuffer);
-                const workbook = XLSX.read(data, { type: 'array' });
-                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-                const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
-                console.log("Đã phân tích dữ liệu JSON từ Excel.");
+        // --- Kiểm tra Content-Type và Status ---
+        const contentType = response.headers.get('content-type');
+        console.log("Content-Type:", contentType);
 
-                // Cập nhật cả originalData và processedData
-                originalData = processData(jsonData); // Dữ liệu gốc
-                processedData = JSON.parse(JSON.stringify(originalData)); // Bản sao để chỉnh sửa
-                currentTab = 'missing'; // Reset về tab mặc định
-                updateUI();
-                alert("Tải file thành công!");
-
-            } catch (error) {
-                console.error("Chi tiết lỗi khi tải URL:", error); // Log lỗi chi tiết
-                alert(`Lỗi tải URL: ${error.message || "Kiểm tra lại URL, kết nối mạng hoặc thử lại sau."}`);
-            } finally {
-                // Ẩn thông báo đang xử lý (nếu có)
-                // Ví dụ: document.body.style.cursor = 'default';
-            }
+        if (!response.ok) {
+            // Nếu server báo lỗi (status không phải 2xx)
+            let errorBody = await response.text().catch(() => 'Không thể đọc nội dung lỗi');
+            console.error("Nội dung lỗi từ proxy/server:", errorBody);
+             // Kiểm tra xem có phải lỗi HTML không
+             if (contentType && contentType.includes('text/html')) {
+                 // Lỗi nhưng trả về HTML (vd: trang 404, trang đăng nhập...)
+                 throw new Error(`Lỗi ${response.status}: Nhận được trang HTML thay vì file Excel. Có thể link sai, cần đăng nhập hoặc sheet không được chia sẻ công khai.`);
+             } else {
+                // Lỗi khác
+                throw new Error(`Lỗi HTTP: ${response.status} ${response.statusText}`);
+             }
         }
+
+        // Kiểm tra lại Content-Type ngay cả khi status là OK (200)
+        // Một số proxy/trường hợp có thể trả về HTML với status 200
+        if (!contentType || !(contentType.includes('spreadsheetml.sheet') || contentType.includes('application/vnd.ms-excel') || contentType.includes('octet-stream'))) {
+             // Nếu Content-Type không phải là Excel hoặc binary
+             let responseText = '';
+             try {
+                 // Thử đọc nội dung xem có phải HTML không
+                 const clonedResponse = response.clone(); // Clone để đọc text mà không ảnh hưởng arrayBuffer
+                 responseText = await clonedResponse.text();
+             } catch (e) { console.error("Không thể đọc response text để kiểm tra HTML"); }
+
+             if (responseText.trim().toLowerCase().startsWith('<html') || responseText.trim().toLowerCase().startsWith('<!doctype html')) {
+                 console.error("Nội dung phản hồi có vẻ là HTML:", responseText.substring(0, 500));
+                 throw new Error("Lỗi định dạng: Nhận được HTML thay vì file Excel. Hãy đảm bảo link Google Sheet được chia sẻ công khai ('Anyone with the link can view').");
+             } else {
+                 // Không phải HTML nhưng cũng không phải định dạng Excel mong đợi
+                 console.warn(`Content-Type không mong đợi: ${contentType}. Vẫn thử xử lý...`);
+             }
+        }
+        // --- Kết thúc kiểm tra Content-Type ---
+
+        console.log("Đang xử lý dữ liệu ArrayBuffer...");
+        const arrayBuffer = await response.arrayBuffer();
+        console.log("Đã nhận ArrayBuffer, kích thước:", arrayBuffer.byteLength);
+
+        // Kiểm tra file quá nhỏ (thường là dấu hiệu lỗi)
+        if (arrayBuffer.byteLength < 100) { // Ngưỡng nhỏ, có thể điều chỉnh
+             let potentialErrorText = '';
+             try {
+                 // Thử giải mã xem có phải text lỗi không
+                 potentialErrorText = new TextDecoder().decode(arrayBuffer);
+             } catch {}
+             console.error("Kích thước file quá nhỏ, có thể là lỗi:", potentialErrorText);
+             throw new Error("Tải file thất bại: File nhận được quá nhỏ, có thể là trang lỗi hoặc link không đúng.");
+        }
+
+        // Tiến hành phân tích nếu mọi thứ có vẻ ổn
+        const data = new Uint8Array(arrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+        console.log("Đã phân tích dữ liệu JSON từ Excel.");
+
+        // Cập nhật dữ liệu và UI
+        originalData = processData(jsonData);
+        processedData = JSON.parse(JSON.stringify(originalData));
+        currentTab = 'missing'; // Reset về tab mặc định
+        updateUI();
+        alert("Tải file thành công!");
+
+    } catch (error) {
+        console.error("Chi tiết lỗi khi tải URL:", error);
+        // Hiển thị thông báo lỗi cụ thể hơn cho người dùng
+        let userMessage = `Lỗi tải URL: ${error.message || "Không rõ nguyên nhân."}`;
+        if (error.message && error.message.includes("HTML")) {
+             // Nếu lỗi có chứa chữ HTML, hướng dẫn kiểm tra chia sẻ
+             userMessage += "\nVui lòng kiểm tra:\n1. Link Google Sheets có đúng không?\n2. Sheet đã được chia sẻ công khai ('Anyone with the link can view') chưa?";
+        } else if (error.name === 'TimeoutError') {
+             userMessage = "Lỗi: Yêu cầu tải file mất quá nhiều thời gian. Kiểm tra kết nối mạng hoặc thử lại.";
+        } else if (!navigator.onLine) {
+             userMessage = "Lỗi: Không có kết nối mạng.";
+        }
+        alert(userMessage);
+    } finally {
+        // --- Khôi phục nút và con trỏ ---
+        loadButton.textContent = originalButtonText;
+        loadButton.disabled = false;
+        document.body.style.cursor = 'default';
+    }
+}
 
 
         // Hàm kiểm tra URL hợp lệ
